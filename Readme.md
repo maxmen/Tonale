@@ -25,7 +25,10 @@ You can proceed with downloading the materials in this GitHub repository. You ha
 
 * clone the repository by running the command
 `git clone https://github.com/maxmen/Tonale.git` in your terminal. You will find the materials in a directory called `Tonale`. 
-* download the content as a ZIP file. Click on the green button ```diff + Code``` above. Then click on "Download ZIP". Once the file has been downloaded, unzip it in a directory of your choice. You will find the materials in a sub-directory called `Tonale-master`.
+* download the content as a ZIP file. Click on the green button ```diff 
++ Code
+```
+above. Then click on "Download ZIP". Once the file has been downloaded, unzip it in a directory of your choice. You will find the materials in a sub-directory called `Tonale-master`.
 
 > **Warning**
 > It may happen that the files in the repository will be updated during the school. Stay tuned!
