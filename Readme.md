@@ -13,7 +13,7 @@ Once you have installed python, I suggest you create an environment for this tut
 
 `python create -n tonale python=3.8`
 
-This will create a python 3.8 environment called `tonale`, where we will download all needed packages. The notebooks should work also with other python versions, but be aware that I tested them with version 3.8. 
+This instruction will create a python 3.8 environment called `tonale`, where we will download all needed packages. The notebooks should work also with other python versions, but be aware that I tested them with version 3.8. 
 
 To activate the environment, type 
 
@@ -21,8 +21,18 @@ To activate the environment, type
 
 from the command line.
 
+You can proceed with downloading the materials in this GitHub repository. You have two options:
+
+* clone the repository by running the command
+`git clone https://github.com/maxmen/Tonale.git` in your terminal. You will find the materials in a directory called `Tonale`. 
+* download the content as a ZIP file. Click on the green button <span style="color:blue">`Code`</span> above. Then click on "Download ZIP". Once the file has been downloaded, unzip it in a directory of your choice. You will find the materials in a sub-directory called `Tonale-master`.
+
+<mark>Warning: it may happen that the files in the repository will be updated during the school. Stay tuned!</mark>
+
 You will need to install the packages that are listed in the file `requirememts.txt`. You just need to execute the command 
 
 `pip install -r requirements`
 
 and everything should work smoothly, **if you are lucky** ;-). If not, you'll need to manually install some package, either using `conda install <package name>` or `pip install <package name>`.
+
+At this point, you should be able to open a Jupyter notebook in your browser.
