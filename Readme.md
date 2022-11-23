@@ -30,6 +30,9 @@ You can proceed with downloading the materials in this GitHub repository. You ha
 | Warning: it may happen that the files in the repository will be updated during the school. Stay tuned! |
 | --- |
 
+> **Note**
+> It may happen that the files in the repository will be updated during the school. Stay tuned!
+
 You will need to install the packages that are listed in the file `requirememts.txt`. You just need to execute the command 
 
 `pip install -r requirements`
