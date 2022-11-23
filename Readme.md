@@ -32,7 +32,7 @@ You can proceed with downloading the materials in this GitHub repository. You ha
 
 You will need to install the packages that are listed in the file `requirememts.txt`. You just need to execute the command 
 
-`pip install -r requirements`
+`pip install -r requirements.txt`
 
 and everything should work smoothly, **if you are lucky** ;-). If not, you'll need to manually install some package, either using `conda install <package name>` or `pip install <package name>`.
 
@@ -41,3 +41,6 @@ At this point, you should be able to open a Jupyter notebook in your browser by 
 `jupyter notebook <notebook name>`
 
 You can also visualize the notebooks in `nbviewer` by clicking on the notebook name in the [GitHub page](https://github.com/maxmen/Tonale). However, you won't be able to execute the codes in this way.
+
+## Python mini-tutorial
+I wrote a very basic mini-tutorial on python in the [`python_tutorial.ipynb`](python_tutorial.ipynb) jupyter notebook.
