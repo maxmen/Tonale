@@ -1,4 +1,8 @@
+.gitignore
 Notebook1_withsolutions.ipynb
+python_tutorial_with_astropy.ipynb
 data/kappa_2.fits
 data/kappa.fits
 data/potential.fits
+data/macs1206.png
+data/RGB_macs1206.fits

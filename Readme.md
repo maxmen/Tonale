@@ -44,3 +44,6 @@ You can also visualize the notebooks by clicking on the notebook name in the [Gi
 
 ## Python mini-tutorial
 I wrote a very basic mini-tutorial on python in the [`python_tutorial.ipynb`](python_tutorial.ipynb) jupyter notebook. This should help those of you who are not very familiar with python.
+
+## Additional ressources
+For additional reading and python examples, check out my book [*Introduction to Gravitational Lensing with python examples*](https://link.springer.com/book/10.1007/978-3-030-73582-1).
