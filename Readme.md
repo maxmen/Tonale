@@ -40,7 +40,7 @@ At this point, you should be able to open a Jupyter notebook in your browser by 
 
 `jupyter notebook <notebook name>`
 
-You can also visualize the notebooks in `nbviewer` by clicking on the notebook name in the [GitHub page](https://github.com/maxmen/Tonale). However, you won't be able to execute the codes in this way.
+You can also visualize the notebooks by clicking on the notebook name in the [GitHub page](https://github.com/maxmen/Tonale). However, you won't be able to execute the codes in this way.
 
 ## Python mini-tutorial
-I wrote a very basic mini-tutorial on python in the [`python_tutorial.ipynb`](python_tutorial.ipynb) jupyter notebook.
+I wrote a very basic mini-tutorial on python in the [`python_tutorial.ipynb`](python_tutorial.ipynb) jupyter notebook. This should help those of you who are not very familiar with python.
