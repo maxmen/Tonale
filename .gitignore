@@ -1,6 +1,8 @@
 .gitignore
 Notebook1_withsolutions.ipynb
+Notebook2_withsolutions.ipynb
 python_tutorial_with_astropy.ipynb
+garbage.ipynb
 data/kappa_2.fits
 data/kappa.fits
 data/potential.fits

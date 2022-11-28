@@ -3,7 +3,8 @@ numpy
 scipy
 astropy
 jupyter
-jupyterlab
+jupyterlab>=3
+ipympl
 pillow
 aplpy
 scikit-image

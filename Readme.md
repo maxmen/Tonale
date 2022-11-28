@@ -38,7 +38,13 @@ and everything should work smoothly, **if you are lucky** ;-). If not, you'll ne
 
 At this point, you should be able to open a Jupyter notebook in your browser by running 
 
-`jupyter notebook <notebook name>`
+`jupyter lab <notebook name>`
+
+>**WARNING**: you may also open the notebooks with 
+>
+>`jupyter notebook <notebook name>`
+>
+> but you may experience some problems with the interactive plots in notebook 2.
 
 You can also visualize the notebooks by clicking on the notebook name in the [GitHub page](https://github.com/maxmen/Tonale). However, you won't be able to execute the codes in this way.
 
