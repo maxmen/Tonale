@@ -7,6 +7,7 @@ from skimage import measure
 from scipy.ndimage import map_coordinates
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from astropy.modeling.functional_models import Sersic2D
 
 class genlen(object):
     def __init__(self):
@@ -407,3 +408,377 @@ class piemd(genlen):
         return den
 
 
+class gensrc(object):
+    def __init__(self) -> object:
+        self.initialized=True
+
+    def ray_trace(self):
+        px = self.df.pixel_scale
+
+        x1pix = (self.x1 - self.df.thetax[0]) / px
+        x2pix = (self.x2 - self.df.thetay[0]) / px
+
+        if len(x1pix.shape) > 1:
+            x1pix[:, -1] = np.round(x1pix[:, -1], 0)
+            x2pix[-1, :] = np.round(x2pix[-1, :], 0)
+            x1pix[:, 0] = np.round(x1pix[:, 0], 0)
+            x2pix[0, :] = np.round(x2pix[0, :], 0)
+        else:
+            x1pix[-1] = np.round(x1pix[-1], 0)
+            x2pix[-1] = np.round(x2pix[-1], 0)
+            x1pix[0] = np.round(x1pix[0], 0)
+            x2pix[0] = np.round(x2pix[0], 0)
+
+        a1 = map_coordinates(self.df.a1,
+                             [x2pix, x1pix], order=1, prefilter=True)
+        a2 = map_coordinates(self.df.a2,
+                             [x2pix, x1pix], order=1, prefilter=True)
+
+        y1 = (self.x1 - a1 * self.rescf)  # y1 coordinates on the source plane
+        y2 = (self.x2 - a2 * self.rescf)  # y2 coordinates on the source plane
+
+        return (y1, y2)
+
+
+class pointsrc(gensrc):
+
+    def __init__(self, size=100.0, sizex=None, sizey=None, Npix=100, gl=None,
+                 save_unlensed=False, **kwargs):
+
+        if ('ys1' in kwargs):
+            self.ys1 = kwargs['ys1']
+        else:
+            self.ys1 = 0.0
+
+        if ('ys2' in kwargs):
+            self.ys2 = kwargs['ys2']
+        else:
+            self.ys2 = 0.0
+
+        if ('flux' in kwargs):
+            self.flux = kwargs['flux']
+        else:
+            self.flux = 100.0
+
+        if ('zs' in kwargs):
+            self.zs = kwargs['zs']
+        else:
+            self.zs = 1.0
+
+        self.rescf = 1.0
+        if gl != None:
+            if self.zs != gl.zs:
+                if self.zs > gl.zl:
+                    ds = gl.co.angular_diameter_distance(self.zs).value
+                    dls = gl.co.angular_diameter_distance_z1z2(gl.zl,self.zs).value
+                    self.rescf=dls/ds*gl.ds/gl.dls
+                else:
+                    self.rescf = 0.0
+
+        self.N = Npix
+        self.df = gl
+
+        # define the pixel coordinates
+        if sizex == None or sizey == None:
+            self.size = float(size)
+            pcx = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+            pcy = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+            self.center_frame = [0.,0.]
+        else:
+            pcx = np.linspace(sizex[0], sizex[1], self.N)
+            pcy = np.linspace(sizey[0], sizey[1], self.N)
+            self.size=sizex[1]-sizex[0]
+            self.center_frame = [(sizex[0] + sizex[1]) / 2.0, (sizey[0] + sizey[1]) / 2.0]
+        #pc = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+
+        self.x1, self.x2 = np.meshgrid(pcx, pcy)
+
+        self.pixel = self.size / self.N
+
+        if self.df == None: # NO LENS
+            self.image = self.brightness(self.ys1,self.ys2)
+            if(save_unlensed):
+                self.image_unlensed = self.image
+        else:               # LENS
+            if(save_unlensed):
+                self.image_unlensed = self.brightness(self.ys1,self.ys2)
+            self.image = np.zeros((self.N, self.N))
+            self.xi1, self.xi2, self.mui = self.find_images()
+            #print (self.xi1)
+            #print (self.xi2)
+            #print (self.mui)
+            for i in range(len(self.xi1)):
+                image_tmp = self.brightness(self.xi1[i],self.xi2[i], self.mui[i])
+                self.image=self.image+image_tmp.copy()
+
+
+    def brightness(self,ys1,ys2,mu=1.0):
+        # convert image positions with respect to the deflector center into 
+        # image positions with respect to the image center
+        #print (self.center_frame)
+        ys1 = ys1 - self.center_frame[0]
+        ys2 = ys2 - self.center_frame[1]
+
+        pix = self.size / self.N   # LB: this is already defined above as self.pixel...
+
+        px = int(ys1/pix + self.N/2.)
+        py = int(ys2/pix + self.N/2.)
+        brightness=np.zeros((self.N,self.N))
+        if ((px >= 0) & (px<self.N) & (py >= 0) & (py < self.N)):
+            brightness[py,px]=self.flux*mu
+        return (brightness)
+
+
+    '''
+    Find the images of a source at (ys1,ys2) by mapping triangles on the lens plane into
+    triangles in the source plane. Then search for the triangles which contain the source. 
+    The image position is then computed by weighing with the distance from the vertices of the 
+    triangle on the lens plane
+    '''
+
+    def find_images(self):
+        # map the source position in pixels onto the deflector grid
+        y1s = self.ys1/self.df.pixel_scale + len(self.df.thetax) / 2.0
+        y2s = self.ys2/self.df.pixel_scale + len(self.df.thetay) / 2.0
+
+
+        # ray-trace the deflector grid onto the source plane
+        y1 = self.df.theta1 - self.df.a1*self.rescf
+        y2 = self.df.theta2 - self.df.a2*self.rescf
+
+        # convert to pixel units
+        xray = y1.copy() / self.df.pixel_scale + len(self.df.thetax) / 2.0
+        yray = y2.copy() / self.df.pixel_scale + len(self.df.thetay) / 2.0
+
+        # shift the maps by one pixel
+        xray1 = np.roll(xray,   1, axis=1)
+        xray2 = np.roll(xray1,  1, axis=0)
+        xray3 = np.roll(xray2, -1, axis=1)
+        yray1 = np.roll(yray,   1, axis=1)
+        yray2 = np.roll(yray1,  1, axis=0)
+        yray3 = np.roll(yray2, -1, axis=1)
+
+        """
+        For each pixel on the LENS plane, build two triangles. By means of 
+        ray-tracing these are mapped onto the source plane into other two 
+        triangles. Compute the distances of the vertices of the triangles on 
+        the SOURCE plane from the source and check using cross-products if the
+        source is inside one of the two triangles.
+        """
+        # l1=((yray1-yray2)*(ys1-xray2)+(xray2-xray1)*(ys2-yray2))/((yray1-yray2)*(xray-xray2)+(xray2-xray1)*(yray-yray2))
+
+        x1 = y1s - xray
+        y1 = y2s - yray
+
+        x2 = y1s - xray1
+        y2 = y2s - yray1
+
+        x3 = y1s - xray2
+        y3 = y2s - yray2
+
+        x4 = y1s - xray3
+        y4 = y2s - yray3
+
+        prod12 = x1 * y2 - x2 * y1
+        prod23 = x2 * y3 - x3 * y2
+        prod31 = x3 * y1 - x1 * y3
+        prod13 = -prod31
+        prod34 = x3 * y4 - x4 * y3
+        prod41 = x4 * y1 - x1 * y4
+
+        image = np.zeros(xray.shape)
+        image[((np.sign(prod12) == np.sign(prod23)) & (np.sign(prod23) == np.sign(prod31)))] = 1
+        image[((np.sign(prod13) == np.sign(prod34)) & (np.sign(prod34) == np.sign(prod41)))] = 2
+
+        # In the following, the choices 'image == 1' and 'image == 2' stand for
+        # upper and lower triangles (or viceversa).
+
+        # first kind of images (first triangle)
+        images1 = np.argwhere(image == 1)
+        xi_images_ = images1[:, 1]
+        yi_images_ = images1[:, 0]
+        xi_images = xi_images_[(xi_images_ > 0) & (yi_images_ > 0)]
+        yi_images = yi_images_[(xi_images_ > 0) & (yi_images_ > 0)]
+
+        # compute the weights
+        w = np.array([1. / np.sqrt(x1[xi_images, yi_images] ** 2 + y1[xi_images, yi_images] ** 2),
+                      1. / np.sqrt(x2[xi_images, yi_images] ** 2 + y2[xi_images, yi_images] ** 2),
+                      1. / np.sqrt(x3[xi_images, yi_images] ** 2 + y3[xi_images, yi_images] ** 2)])
+        xif1, yif1 = self.refineImagePositions(xi_images, yi_images, w, 1)
+
+        # second kind of images
+        images1 = np.argwhere(image == 2)
+        xi_images_ = images1[:, 1]
+        yi_images_ = images1[:, 0]
+        xi_images = xi_images_[(xi_images_ > 0) & (yi_images_ > 0)]
+        yi_images = yi_images_[(xi_images_ > 0) & (yi_images_ > 0)]
+
+        # compute the weights
+        w = np.array([1. / np.sqrt(x1[xi_images, yi_images] ** 2 + y1[xi_images, yi_images] ** 2),
+                      1. / np.sqrt(x3[xi_images, yi_images] ** 2 + y3[xi_images, yi_images] ** 2),
+                      1. / np.sqrt(x4[xi_images, yi_images] ** 2 + y4[xi_images, yi_images] ** 2)])
+        xif2, yif2 = self.refineImagePositions(xi_images, yi_images, w, 2)
+
+        xi = np.concatenate([xif1, xif2])
+        yi = np.concatenate([yif1, yif2])
+
+        mui=self.mu_image(xi,yi)
+        xi = (xi - 1 - len(self.df.thetax) / 2.0) * self.df.pixel_scale
+        yi = (yi - 1 - len(self.df.thetay) / 2.0) * self.df.pixel_scale
+
+        isel = mui > 1e-2
+        return (xi[isel], yi[isel], mui[isel])
+
+    def refineImagePositions(self, x, y, w, typ):
+        """Image positions are computed as weighted means of the positions
+        of the triangle vertices. The weights are the distances between the
+        vertices mapped onto the source plane, and the source position."""
+
+        if (typ == 2):
+            xp = np.array([x, x + 1, x + 1])
+            yp = np.array([y, y, y + 1])
+        else:
+            xp = np.array([x, x + 1, x])
+            yp = np.array([y, y + 1, y + 1])
+        xi = np.zeros(x.size)
+        yi = np.zeros(y.size)
+        for i in range(x.size):
+            xi[i] = (xp[:, i] / w[:, i]).sum() / (1. / w[:, i]).sum()
+            yi[i] = (yp[:, i] / w[:, i]).sum() / (1. / w[:, i]).sum()
+        return (xi, yi)
+
+    def mu_image(self,xi1,xi2):
+        mu = map_coordinates((1.0-self.df.ka)**2-self.df.g1**2-self.df.g2**2,
+                             [xi2-1, xi1-1], order=1, prefilter=True)
+        return(np.abs(1./mu))
+
+class sersic(gensrc):
+
+    def __init__(self, size=100.0, Npix=100, gl=None, sizex=None, sizey=None, pcx=None, pcy=None, mask=None, save_unlensed=False, rmaxf=100, **kwargs):
+
+        if ('n' in kwargs):
+            self.n = kwargs['n']
+        else:
+            self.n = 4
+
+        if ('re' in kwargs):
+            self.re = kwargs['re']
+        else:
+            self.re = 5.0
+
+        if ('q' in kwargs):
+            self.q = kwargs['q']
+        else:
+            self.q = 1.0
+
+        if ('pa' in kwargs):
+            self.pa = kwargs['pa']
+        else:
+            self.pa = 0.0
+
+        if ('ys1' in kwargs):
+            self.ys1 = kwargs['ys1']
+        else:
+            self.ys1 = 0.0
+
+        if ('ys2' in kwargs):
+            self.ys2 = kwargs['ys2']
+        else:
+            self.ys2 = 0.0
+
+        if ('c' in kwargs):
+            self.c = kwargs['c']
+        else:
+            self.c = 0.0
+
+        if ('Ie' in kwargs):
+            self.Ie = kwargs['Ie']
+        else:
+            self.Ie = 100.0
+
+        if ('zs' in kwargs):
+            self.zs = kwargs['zs']
+        else:
+            self.zs = 1.0
+
+
+        if gl != None:
+            if self.zs != gl.zs:
+                if self.zs > gl.zl:
+                    ds = gl.co.angular_diameter_distance(self.zs).value
+                    dls = gl.co.angular_diameter_distance_z1z2(gl.zl,self.zs).value
+                    self.rescf=dls/ds*gl.ds/gl.dls
+                else:
+                    self.rescf = 0.0
+            else:
+                self.rescf=1.0
+        else:
+            self.rescf=1.0
+
+        self.df = gl
+
+        self.mask = mask
+        self.save_unlensed = save_unlensed
+
+        # define the pixel coordinates
+        if pcx is not None or pcy is not None:
+            self.Nx = len(pcx)
+            self.Ny = len(pcx)
+            self.sizex = np.max(pcx)-np.min(pcx)
+            self.sizey = np.max(pcy)-np.min(pcy)
+            if np.round((pcx[1]-pcx[0]),6) != np.round((pcy[1]-pcy[0]),6):
+                raise Exception('Pixels of pcx and pcy must have the same dimension')
+
+        elif sizex is not None or sizey is not None:
+            self.N = Npix
+            pcx = np.linspace(sizex[0], sizex[1], self.N)
+            pcy = np.linspace(sizey[0], sizey[1], self.N)
+            self.Nx = len(pcx)
+            self.Ny = len(pcx)
+            self.sizex = np.max(pcx)-np.min(pcx)
+            self.sizey = np.max(pcy)-np.min(pcy)
+
+        else:
+            self.size = size
+            self.N = Npix
+            pcx = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+            pcy = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+            self.Nx = Npix
+            self.Ny = Npix
+            self.sizex = float(size)
+            self.sizey = float(size)
+
+        self.x1, self.x2 = np.meshgrid(pcx, pcy)
+
+        if mask is not None:
+            image_mask = np.full(self.x1.shape,np.nan)
+            self.x1, self.x2 = self.x1[self.mask], self.x2[self.mask]
+
+        if self.df != None:
+            y1, y2 = self.ray_trace()
+        else:
+            y1, y2 = self.x1, self.x2
+
+        self.y1 = y1
+        self.y2 = y2
+
+        self.image = self.brightness(y1, y2, rmaxf)
+        if (save_unlensed):
+            self.image_unlensed = self.brightness(self.x1, self.x2, rmaxf=rmaxf)
+
+        if self.mask is not None:
+            image_mask[self.mask] = self.image
+            self.image = image_mask
+
+    def brightness(self, y1, y2, rmaxf):
+        px = self.sizex / (self.Nx - 1)
+
+        brightness = np.zeros_like(y1)
+        isel = (y1 < rmaxf*self.re + self.ys1) & (y2 < rmaxf*self.re + self.ys2)
+
+        s = Sersic2D(amplitude=self.Ie, r_eff=self.re, n=self.n, x_0=self.ys1, y_0=self.ys2,
+                     ellip=np.sqrt(1-self.q**2), theta=self.pa + np.pi/2)
+
+        brightness[isel] = s(y1[isel], y2[isel])*px*px
+
+        return brightness
