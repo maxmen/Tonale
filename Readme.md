@@ -36,7 +36,7 @@ You will need to install the packages that are listed in the file `requirememts.
 
 and everything should work smoothly, **if you are lucky** ;-). If not, you'll need to manually install some package, either using `conda install <package name>` or `pip install <package name>`.
 
-At this point, you should be able to open a Jupyter notebook and use it. I like to work with (Visual Studio Code)[https://code.visualstudio.com/], but you may also open the notebooks in your browser by running 
+At this point, you should be able to open a Jupyter notebook and use it. I like to work with [Visual Studio Code](https://code.visualstudio.com/), but you may also open the notebooks in your browser by running 
 
 `jupyter lab <notebook name>`
 
