@@ -36,7 +36,7 @@ You will need to install the packages that are listed in the file `requirememts.
 
 and everything should work smoothly, **if you are lucky** ;-). If not, you'll need to manually install some package, either using `conda install <package name>` or `pip install <package name>`.
 
-At this point, you should be able to open a Jupyter notebook in your browser by running 
+At this point, you should be able to open a Jupyter notebook and use it. I like to work with (Visual Studio Code)[https://code.visualstudio.com/], but you may also open the notebooks in your browser by running 
 
 `jupyter lab <notebook name>`
 
@@ -44,7 +44,8 @@ At this point, you should be able to open a Jupyter notebook in your browser by 
 >
 >`jupyter notebook <notebook name>`
 >
-> but you may experience some problems with the interactive plots in notebook 2.
+> but you may have to change some instructions in the notebooks with interactive plots.
+
 
 You can also visualize the notebooks by clicking on the notebook name in the [GitHub page](https://github.com/maxmen/Tonale). However, you won't be able to execute the codes in this way.
 
