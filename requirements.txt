@@ -8,3 +8,9 @@ ipympl
 pillow
 aplpy
 scikit-image
+lmfit
+emcee
+numdifftools
+tqdm
+corner
+pandas

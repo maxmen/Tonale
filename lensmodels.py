@@ -8,6 +8,7 @@ from scipy.ndimage import map_coordinates
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from astropy.modeling.functional_models import Sersic2D
+from scipy.optimize import fsolve, newton,brenth, brentq
 
 class genlen(object):
     def __init__(self):
@@ -61,10 +62,10 @@ class genlen(object):
         self.nray2 = len(self.thetay)
 
         self.pixel_scale = self.thetax[1]-self.thetax[0]
-        self.conv_fact_time = \
-                ((1. + self.zl) / c.to(u.km / u.s) *
-                 (self.dl * self.ds / self.dls).to(u.km)).to(u.d) * \
-                (np.pi / 180.0 / 3600.) ** 2 
+        #self.conv_fact_time = \
+        #        ((1. + self.zl) / c.to(u.km / u.s) *
+        #         (self.dl * self.ds / self.dls).to(u.km)).to(u.d) * \
+        #        (np.pi / 180.0 / 3600.) ** 2 
         
     def tancl(self):
         lambdat=1.0-self.ka-np.sqrt(self.g1*self.g1+self.g2*self.g2)
@@ -97,6 +98,18 @@ class genlen(object):
         cau = np.zeros(np.array(cl).shape)
         cau[:,0], cau[:,1] = betac2, betac1
         return cau
+
+    def combinewith(self,gl):
+
+        if np.round(gl.pixel_scale,6) != np.round(self.pixel_scale,6)\
+                or gl.size1 != self.size1 \
+                or gl.size2 != self.size2:
+            raise Exception('Incompatible sizes of deflectors (conbinewith)')
+        self.ka=self.ka+gl.ka
+        self.g1=self.g1+gl.g1
+        self.g2=self.g2+gl.g2
+        self.a1=self.a1+gl.a1
+        self.a2=self.a2+gl.a2
 
 
 class sie(genlen):
@@ -143,10 +156,19 @@ class sie(genlen):
         else:
             self.x2 = 0.0
 
+        if self.theta_c < 1e-4:
+            self.lens_type = 'SIE'
+        else:
+            self.lens_type = 'NIE'   
+
         self.co = co
         self.dl = co.angular_diameter_distance(self.zl)
         self.ds = co.angular_diameter_distance(self.zs)
         self.dls = co.angular_diameter_distance_z1z2(self.zl, self.zs)
+        self.conv_fact_time = \
+            ((1. + self.zl) / c.to(u.km / u.s) *
+            (self.dl * self.ds / self.dls).to(u.km)).to(u.d) * \
+            (np.pi / 180.0 / 3600.) ** 2 
 
     # @property
     def bsie(self):
@@ -262,10 +284,19 @@ class sie(genlen):
 
         return (gammax, gammay)
 
+    def mu(self, theta1__, theta2__):
+        kappa = self.kappa(theta1__, theta2__)
+        gammax,gammay = self.gamma(theta1__, theta2__)
+        gamma=np.sqrt(gammax**2+gammay**2)
+        mu = 1.0/abs((1-kappa)**2-gamma**2)
+        return mu
+
+
 class piemd(genlen):
 
     def __init__(self, co, **kwargs):
         self.computed_potential = False
+        self.lens_type = 'PIEMD'
         if ('zl' in kwargs):
             self.zl = kwargs['zl']
         else:
@@ -280,6 +311,10 @@ class piemd(genlen):
         self.dl = co.angular_diameter_distance(self.zl)
         self.ds = co.angular_diameter_distance(self.zs)
         self.dls = co.angular_diameter_distance_z1z2(self.zl, self.zs)
+        self.conv_fact_time = \
+            ((1. + self.zl) / c.to(u.km / u.s) *
+            (self.dl * self.ds / self.dls).to(u.km)).to(u.d) * \
+            (np.pi / 180.0 / 3600.) ** 2         
 
         if ('theta_c' in kwargs):
             self.theta_c = kwargs['theta_c']
@@ -443,7 +478,7 @@ class gensrc(object):
 class pointsrc(gensrc):
 
     def __init__(self, size=100.0, sizex=None, sizey=None, Npix=100, gl=None,
-                 save_unlensed=False, **kwargs):
+                 save_unlensed=False, fast=False, **kwargs):
 
         if ('ys1' in kwargs):
             self.ys1 = kwargs['ys1']
@@ -478,38 +513,39 @@ class pointsrc(gensrc):
         self.N = Npix
         self.df = gl
 
-        # define the pixel coordinates
-        if sizex == None or sizey == None:
-            self.size = float(size)
-            pcx = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
-            pcy = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
-            self.center_frame = [0.,0.]
+        if not fast:
+            # define the pixel coordinates
+            if sizex == None or sizey == None:
+                self.size = float(size)
+                pcx = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+                pcy = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
+                self.center_frame = [0.,0.]
+            else:
+                pcx = np.linspace(sizex[0], sizex[1], self.N)
+                pcy = np.linspace(sizey[0], sizey[1], self.N)
+                self.size=sizex[1]-sizex[0]
+                self.center_frame = [(sizex[0] + sizex[1]) / 2.0, (sizey[0] + sizey[1]) / 2.0]
+        
+
+            self.x1, self.x2 = np.meshgrid(pcx, pcy)
+
+            self.pixel = self.size / self.N
+
+            if self.df == None: # NO LENS
+                self.image = self.brightness(self.ys1,self.ys2)
+                if(save_unlensed):
+                    self.image_unlensed = self.image
+            else:               # LENS
+                if(save_unlensed):
+                    self.image_unlensed = self.brightness(self.ys1,self.ys2)
+                self.image = np.zeros((self.N, self.N))
+                self.xi1, self.xi2, self.mui, self.tdi = self.find_images()
+
+                for i in range(len(self.xi1)):
+                    image_tmp = self.brightness(self.xi1[i],self.xi2[i], self.mui[i])
+                    self.image=self.image+image_tmp.copy()
         else:
-            pcx = np.linspace(sizex[0], sizex[1], self.N)
-            pcy = np.linspace(sizey[0], sizey[1], self.N)
-            self.size=sizex[1]-sizex[0]
-            self.center_frame = [(sizex[0] + sizex[1]) / 2.0, (sizey[0] + sizey[1]) / 2.0]
-        #pc = np.linspace(-self.size / 2.0, self.size / 2.0, self.N)
-
-        self.x1, self.x2 = np.meshgrid(pcx, pcy)
-
-        self.pixel = self.size / self.N
-
-        if self.df == None: # NO LENS
-            self.image = self.brightness(self.ys1,self.ys2)
-            if(save_unlensed):
-                self.image_unlensed = self.image
-        else:               # LENS
-            if(save_unlensed):
-                self.image_unlensed = self.brightness(self.ys1,self.ys2)
-            self.image = np.zeros((self.N, self.N))
-            self.xi1, self.xi2, self.mui = self.find_images()
-            #print (self.xi1)
-            #print (self.xi2)
-            #print (self.mui)
-            for i in range(len(self.xi1)):
-                image_tmp = self.brightness(self.xi1[i],self.xi2[i], self.mui[i])
-                self.image=self.image+image_tmp.copy()
+            self.xi1, self.xi2, self.mui, self.tdi = self.find_images()
 
 
     def brightness(self,ys1,ys2,mu=1.0):
@@ -537,6 +573,20 @@ class pointsrc(gensrc):
     '''
 
     def find_images(self):
+
+        if (self.df.lens_type == 'SIE'):
+            """
+            If the lens is singular, use a faster method to find the multiple images than triangle mapping
+            """
+            x,phi = self.phi_ima(checkplot=False,verbose=False)
+            xi=x*np.cos(phi)
+            yi=x*np.sin(phi)
+            mui = self.df.mu(xi,yi)
+            poti = self.df.potential(xi,yi)
+            tdi = (0.5*((self.ys1-xi)**2+(self.ys2-yi)**2)-poti)*self.df.conv_fact_time.value
+            tdi = tdi-tdi.min()
+            return xi, yi, mui, tdi
+
         # map the source position in pixels onto the deflector grid
         y1s = self.ys1/self.df.pixel_scale + len(self.df.thetax) / 2.0
         y2s = self.ys2/self.df.pixel_scale + len(self.df.thetay) / 2.0
@@ -623,11 +673,16 @@ class pointsrc(gensrc):
         yi = np.concatenate([yif1, yif2])
 
         mui=self.mu_image(xi,yi)
+        poti=self.pot_image(xi,yi)
+
         xi = (xi - 1 - len(self.df.thetax) / 2.0) * self.df.pixel_scale
         yi = (yi - 1 - len(self.df.thetay) / 2.0) * self.df.pixel_scale
 
+        tdi=(0.5*((self.ys1-xi)**2+(self.ys2-yi)**2)-poti)*self.df.conv_fact_time.value
+
         isel = mui > 1e-2
-        return (xi[isel], yi[isel], mui[isel])
+        tdi[isel] = tdi[isel]-tdi[isel].min()
+        return (xi[isel], yi[isel], mui[isel], tdi[isel])
 
     def refineImagePositions(self, x, y, w, typ):
         """Image positions are computed as weighted means of the positions
@@ -651,6 +706,87 @@ class pointsrc(gensrc):
         mu = map_coordinates((1.0-self.df.ka)**2-self.df.g1**2-self.df.g2**2,
                              [xi2-1, xi1-1], order=1, prefilter=True)
         return(np.abs(1./mu))
+
+    def pot_image(self,xi1,xi2):
+        pot = map_coordinates(self.df.pot,
+                             [xi2-1, xi1-1], order=1, prefilter=True)
+        return pot
+
+
+    #### Functions to be used with SIE models
+    def x_ima(self,phi):
+        x=self.ys1*np.cos(phi)+self.ys2*np.sin(phi)+(self.psi_tilde(phi+self.pa))
+        return x
+
+    def psi_tilde(self,phi):
+        if (self.df.q < 1.0):
+            fp=np.sqrt(1.0-self.df.q**2)
+            return np.sqrt(self.df.q)/fp*(np.sin(phi-self.df.pa)*np.arcsin(fp*np.sin(phi-self.df.pa))+
+                                       np.cos(phi-self.df.pa)*np.arcsinh(fp/self.df.q*np.cos(phi-self.df.pa)))
+        else: 
+            return(1.0)
+
+    def psi(self,x,phi):
+        psi=x*self.psi_tilde(phi)
+        return psi
+    
+    def x_ima(self,y1,y2,phi):
+        x=y1*np.cos(phi)+y2*np.sin(phi)+(self.psi_tilde(phi+self.df.pa))
+        return x
+
+    def alpha(self,phi):
+        fp=np.sqrt(1.0-self.df.q**2)
+        a1=np.sqrt(self.df.q)/fp*np.arcsinh(fp/self.df.q*np.cos(phi))
+        a2=np.sqrt(self.df.q)/fp*np.arcsin(fp*np.sin(phi))
+        return a1,a2
+    
+    def phi_ima(self,checkplot=True,verbose=True):
+        y1_ = self.ys1 * np.cos(self.df.pa) + self.ys2 * np.sin(self.df.pa)
+        y2_ = - self.ys1 * np.sin(self.df.pa) + self.ys2 * np.cos(self.df.pa)
+
+        y1_= y1_/self.df.bsie()/np.sqrt(self.df.q)
+        y2_= y2_/self.df.bsie()/np.sqrt(self.df.q)
+    
+        def phi_func(phi):
+            a1,a2=self.alpha(phi)
+            func=(y1_+a1)*np.sin(phi)-(y2_+a2)*np.cos(phi)
+            return func
+
+        U=np.linspace(0.,2.0*np.pi+0.001,100)
+        c = phi_func(U)
+        s = np.sign(c)
+        phi=[]
+        xphi=[]
+        for i in range(len(U)-1):
+            if s[i] + s[i+1] == 0: # opposite signs
+                u = brentq(phi_func, U[i], U[i+1])
+                z = phi_func(u)
+                if np.isnan(z) or abs(z) > 1e-3:
+                    continue
+                x=self.x_ima(y1_,y2_,u)
+                if (x>0):
+                    phi.append(u)
+                    xphi.append(x)
+                if (verbose):
+                    print('found zero at {}'.format(u))
+                    if (x<0):
+                        print ('discarded because x is negative ({})'.format(x))
+                    else:
+                        print ('accepted because x is positive ({})'.format(x))
+                        
+        xphi=np.array(xphi)
+        phi=np.array(phi)
+        if (checkplot):        
+            phi_=np.linspace(0.,2.0*np.pi,100)
+            ax[0].plot(phi_,phi_func(phi_),label=r'$F(\varphi)$')
+            ax[0].plot(phi_,self.x_ima(y1,y2,phi_),label=r'$x(\varphi)$')
+            #ax[0].plot(phi_,psi_tilde(phi_,f)-1)
+            ax[0].plot(phi,phi_func(phi),'o',markersize=8)
+            ax[0].set_xlabel(r'$\varphi$',fontsize=20)
+            ax[0].set_ylabel(r'$F(\varphi),x(\varphi)$',fontsize=20)
+            ax[0].legend(fontsize=16)
+    
+        return(xphi*self.df.bsie()*np.sqrt(self.df.q),phi+self.df.pa)
 
 class sersic(gensrc):
 
