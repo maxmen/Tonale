@@ -11,7 +11,7 @@ To run the notebooks, you need python installed on your computer. There are seve
 
 Once you have installed python, I suggest you create an environment for this tutorial. Open a terminal and type
 
-`python create -n tonale python=3.8`
+`conda create -n tonale python=3.8`
 
 This instruction will create a python 3.8 environment called `tonale`, where we will download all needed packages. The notebooks should work also with other python versions, but be aware that I tested them with version 3.8. 
 
