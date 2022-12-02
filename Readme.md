@@ -40,7 +40,8 @@ At this point, you should be able to open a Jupyter notebook and use it. I like 
 
 `jupyter lab <notebook name>`
 
-> **WARNING**: you may also open the notebooks with 
+> **WARNING**
+> you may also open the notebooks with 
 >
 >`jupyter notebook <notebook name>`
 >
