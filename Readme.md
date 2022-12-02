@@ -44,8 +44,15 @@ At this point, you should be able to open a Jupyter notebook and use it. I like 
 >
 >`jupyter notebook <notebook name>`
 >
-> but you may have to change some instructions in the notebooks with interactive plots.
-
+> but you may need to follow the instructions below to run the notebooks with interactive plots:
+>```
+>conda install -y nodejs
+>pip install --upgrade jupyterlab
+>jupyter labextension install @jupyter-widgets/jupyterlab-manager
+>jupyter labextension install jupyter-matplotlib
+>jupyter nbextension enable --py widgetsnbextension
+>```
+> Then restart `jupyter`.
 
 You can also visualize the notebooks by clicking on the notebook name in the [GitHub page](https://github.com/maxmen/Tonale). However, you won't be able to execute the codes in this way.
 
